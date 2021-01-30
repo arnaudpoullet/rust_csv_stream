@@ -1,9 +1,17 @@
-mod util;
+use std::sync::Arc;
+
+use hyper::body::Buf;
+use hyper::{body, client::Client, Body, Request};
+use hyper_tls::HttpsConnector;
+
+use serde::Deserialize;
 
 use crate::util::error::ResponseError;
-use std::sync::Arc;
-use hyper::Body;
+use actix_web::{web, App, HttpResponse, HttpServer};
 
+mod util;
+
+#[derive(Debug, Deserialize)]
 struct Element {
     id: u32,
     firstname: String,
@@ -11,19 +19,24 @@ struct Element {
     description: String,
     email: String,
     email2: String,
-    profession: String
+    profession: String,
 }
 
 async fn download_and_parse_csv() -> Result<(), ResponseError> {
-    let https = HttpsConnector::new();
-    let client = Arc::new(Client::builder()
-        .build::<_, hyper::Body>(https));
+    let mut elements = Vec::new();
 
-    let url = "url".to_string();
-    let req = Request::get(url).body(Body::empty()).expect("Request builder");
+    let https = HttpsConnector::new();
+    let client = Arc::new(Client::builder().build::<_, hyper::Body>(https));
+
+    let url =
+        "https://raw.githubusercontent.com/arnaudpoullet/rust_csv_stream/master/static/myFile0.csv"
+            .to_string();
+    let req = Request::get(url)
+        .body(Body::empty())
+        .expect("Request builder");
     // Fetch the url...
     let res = client.request(req).await?;
-    let body= body::to_bytes(res.into_body()).await?;
+    let body = body::to_bytes(res.into_body()).await?;
     //Read the body of the csv line by line and deserialize into Element if possible
     let mut rdr = csv::Reader::from_reader(body.reader());
     for result in rdr.deserialize() {
@@ -32,16 +45,34 @@ async fn download_and_parse_csv() -> Result<(), ResponseError> {
         let record: csv::Result<Element> = result;
         match record {
             Ok(element) => {
-                println!("{:?}",element.email2);
-            },
+                //Process each element as it comes in
+                elements.push(element);
+            }
             Err(err) => return Err(ResponseError::from(err)),
         }
     }
-    println!("testing");
+    println!("Number of elements: {}", elements.len());
+    println!("{:?}", elements.pop());
     Ok(())
 }
 
-#[actix_rt::main]
-async fn main() -> Result<(), ResponseError> {
-    download_and_parse_csv().await
+async fn handler() -> HttpResponse {
+    if let Err(err) = download_and_parse_csv().await {
+        println!("Error: {}", err);
+        return HttpResponse::InternalServerError().finish();
+    }
+    HttpResponse::Ok().finish()
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    HttpServer::new(move || {
+        App::new()
+            .wrap(actix_web::middleware::Logger::default())
+            .route("/", web::get().to(handler))
+    })
+    .bind(("127.0.0.1", "8085".parse().unwrap()))?
+    .workers(1)
+    .run()
+    .await
 }
