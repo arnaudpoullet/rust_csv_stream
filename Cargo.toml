@@ -1,2 +1,2 @@
 [workspace]
-members = ["no_stream","with_stream"]
+members = ["no_stream","with_stream","solution"]

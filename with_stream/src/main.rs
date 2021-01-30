@@ -47,7 +47,7 @@ async fn download_and_parse_csv() -> Result<(), ResponseError> {
     let client = Arc::new(Client::builder().build::<_, hyper::Body>(https));
 
     let url =
-        "https://raw.githubusercontent.com/arnaudpoullet/rust_csv_stream/master/static/myFile0.csv"
+        "https://raw.githubusercontent.com/arnaudpoullet/rust_csv_stream/master/static/no_new_lines.csv"
             .to_string();
     let req = Request::get(url)
         .body(Body::empty())
