@@ -1,0 +1,2 @@
+[workspace]
+members = ["no_stream","with_stream"]
